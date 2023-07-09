@@ -1,0 +1,1089 @@
+<?php
+
+
+namespace App\Http\Controllers;
+use App\Http\Traits\TransactionTrait;
+use App\Models\Airtime;
+use App\Models\Alert;
+use App\Models\Data;
+use App\Models\Transaction;
+use App\Models\Notification;
+use App\Models\ManualFunding;
+use App\Models\ReferralAmount;
+use App\Models\Ticket;
+use App\Models\TotalFund;
+use App\Models\User;
+use App\Models\AdminFund;
+use Illuminate\Auth\Events\Registered;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Http\Request;
+use PDF;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\ContactUsMail;
+use App\Models\AirtimePrice;
+use App\Models\ElectricityPrice;
+use App\Models\ExamPin;
+use App\Models\TvPrice;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Http;
+class UserController extends Controller
+{
+    use TransactionTrait;
+    public function sendmail()
+    {
+        $name = 'Fasanya Oluwapelumi';
+        $location = "Kobape, Ogun State";
+        // dd($location);
+        $mail =  Mail::to('fasanyafemi@gmail.com')->send(new ContactUsMail());
+        dd($mail, Mail::failures());
+    }
+    public function electricity()
+    {
+        $data['alerts'] = Alert::latest()->get();
+          $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.electricity', $data);
+    }
+    public function electricityAPI(Request $request) {
+        if($request->t_type == 'verify') {
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post("https://vtpass.com/api/merchant-verify?serviceID=".$request->service_type."&type=".$request->type."&billersCode=".$request->billersCode);
+            return $response->json();
+        }
+        else {
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post("https://vtpass.com/api/pay?request_id=".$request->request_id."&serviceID=".$request->serviceID."&billersCode=".$request->billersCode."&variation_code=".$request->meter_type."&amount=".intval($request->amount)."&phone=08111111111");
+            return $response->json();
+        }
+    }
+
+    
+    public function reserveAccount() {
+        
+        // $user = Auth::user();
+        // $response =  array([
+        //         "responseBody" =>  [
+
+        //             "accountReference" => "TELNETING-1656330598",
+
+        //             "customerEmail" => $user->email,
+        //             "customerName" => $user->name,
+        //             "accounts" => array(
+        //                 [
+        //                     "bankName" => 'Rolex',
+        //                     "accountNumber" => 'Unavailable',
+        //                     "accountName" => $user->name,
+
+        //                 ],
+        //                 [
+        //                     "bankName" => 'Rolex',
+        //                     "accountNumber" => 'Unavailable',
+        //                     "accountName" => $user->name,
+        //                 ]
+        //             ),
+        //             "collectionChannel" => "RESERVED_ACCOUNT",
+        //             "reservationReference" => "J6W1VK474GU07LH21FML",
+        //             "reservedAccountType" => "GENERAL",
+        //             "status" => "ACTIVE",
+        //             "createdOn" => "2022-06-27 12:50:01.509",
+
+        //         ]
+        //     ]);
+        //      return $response[0];
+        $response = Http::withHeaders([
+       
+            'Authorization' => 'Basic '.base64_encode('MK_PROD_ZF3D9JJY1E:ZZ0V0662ZYHF2SYH2NTGG3ADV2SLUBJ0') 
+        ])->post('https://api.monnify.com/api/v1/auth/login');
+
+        $response_token = $response['responseBody']['accessToken'];
+      
+        $req = [
+            "accountReference" => "FAFODATA-" . time(),
+            "accountName" => "FDATA/" . Auth::user()->email,
+            "currencyCode" => "NGN",
+            "contractCode" => "421693662647",
+            "customerEmail" => Auth::user()->email,
+            "customerName" => Auth::user()->name,
+            // "getAllAvailableBanks" => true,
+            "getAllAvailableBanks" => false,
+            "preferredBanks" => ["232"]
+        ];
+        $response2 = Http::withHeaders([
+       
+            'Authorization' => 'Bearer '.$response_token,
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            
+        ])->post('https://api.monnify.com/api/v2/bank-transfer/reserved-accounts', $req);
+        // dd($response2->json());
+
+      return $response2->json();
+    }
+    public function airtimeAPI(Request $request) {
+        if($request->t_type == 'verify') {
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post("https://vtpass.com/api/merchant-verify?serviceID=".$request->service_type."&type=".$request->type."&billersCode=1111111111111");
+            return $response->json();
+        }
+        else {
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post("https://vtpass.com/api/pay?request_id=".$request->request_id."&serviceID=".$request->serviceID."&billersCode=1111111111111&variation_code=".$request->meter_type."&amount=".intval($request->amount)."&phone=".$request->phone);
+            return $response->json();
+        }
+    }
+    
+     public function buyExamAPI(Request $request) {
+             $serviceID = $request->serviceID;
+        $email = Auth::user()->email;
+        $amount = ExamPin::where('url', $serviceID)->pluck('set_amount');
+        return $amount[0];
+    }
+    
+    public function tvAPI(Request $request) {
+       
+        if($request->t_type == 'verify') {
+          
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->get("https://vtpass.com/api/service-variations?serviceID=".$request->cable_type);
+            return $response->json();
+        }
+        else if($request->t_type == "merchant_verify") {
+           
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post("https://vtpass.com/api/merchant-verify?serviceID=".$request->cable_type.'&billersCode='.$request->billersCode);
+            return $response->json();
+        }
+     
+        else {    
+            
+                                                                                                                                                                                                                                                                    
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post('https://vtpass.com/api/pay?request_id='.$request->request_id.'&amount='.$request->amount.'&subscription_type='.$request->subscription_type.'&phone='.$request->phone.'&serviceID='.$request->serviceID.'&billersCode='.$request->billersCode);
+            return $response->json();
+        }
+    }
+   
+    public function passwordreset() {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.passwordreset', $data);
+    }
+    public function changepassword(Request $request) {
+        $values = explode(",",$request->value);
+        // $val = $request->validate([
+        //     'values' => ['string', 'min:8', 'confirmed','regex:/^.*(?=.{3,})(?=.*[a-zA-Z])(?=.*[0-9]).*$/'],
+            
+        // ]);
+       
+        if(Auth::user()->pin == $values[0]) {
+            $user = Auth::user();
+            $user->password = Hash::make($values[1]);
+            $user->save();
+            
+            return true;
+            // $2y$10$yLJ4HGcoIh2/C9byKfuePuJYWDWMBW29rrRlCR59D3F16jPv1dFxi
+        }
+        else {
+          
+            return false;
+        }
+    }
+    public function old_buy_real_data(Request $request) {
+        
+        $values = explode(',',$request->value);
+       
+        $network_id = $values[0];
+        $phone = $values[1];
+        $plan_id = $values[2];
+        $name = $values[3];
+        $contains = Str::contains($name, 'Corporate');
+        dd($contains);
+        
+    
+        $request_body = [
+            "plan_id" => $plan_id,
+            "network_id" => $network_id,
+            "phone" => $phone
+        ];
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer '.env("SMEPLUG_API_KEY"),
+            'Accept' => "application/json",
+            "Content-Type" => "application/json",
+        ])->post('https://smeplug.ng/api/v1/data/purchase',$request_body);
+       
+        return $response->json();
+        
+    }
+          public function buy_real_data(Request $request) {
+     
+        $values = explode(',',$request->value);
+       
+        $network_id = $values[0];
+        $phone = $values[1];
+        $plan_id2 = $values[2];
+        $name = $values[3];
+        $plan_id = $values[4];
+        $request_body = [
+            "plan" => $plan_id,
+            "network" => $network_id,
+            "mobile_number" => $phone,
+            "Ported_number" => false
+        ];
+        
+        $response = Http::withHeaders([
+            'Authorization' => 'Token 27568c756b857081a7b2d9dff073d3d8e02dbb50',
+            'Accept' => "application/json",
+            "Content-Type" => "application/json",
+        ])->post('https://www.clekktelecoms.com/api/data/',$request_body);
+        // ])->post('https://www.clekktelecoms.com/api/data',$request_body);
+       
+        return $response->json();
+        
+        
+    }
+     public function fetchdata2(Request $request) {
+        $network = $request->network;
+        $dat = Data::where('network',$network)->orderBy('veenode_price')->get();
+        return $dat;
+        
+
+    }
+    public function fetchdata(Request $request) {
+        $network = $request->network;
+        $response = Http::withHeaders([
+            'Authorization' => 'Token 27568c756b857081a7b2d9dff073d3d8e02dbb50',
+            'Accept' => "application/json",
+            "Content-Type" => "application/json",
+        ])->get('https://www.clekktelecoms.com/api/user');
+        // dd($response->json());
+        if($network == "MTN") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['MTN_PLAN']['SME'];
+            return $dat;
+        }
+        elseif($network == "AIRTEL") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['AIRTEL_PLAN']['ALL'];
+            return $dat;
+        }
+        elseif($network == "9MOBILE") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['9MOBILE_PLAN']['ALL'];
+            return $dat;
+        }
+        elseif($network == "GLO") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['GLO_PLAN']['ALL'];
+            return $dat;
+
+        }
+        else {
+            return false;
+        }
+       
+    }
+    public function getdataPrice(Request $request) {
+        $network = $request->network;
+       
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Token 27568c756b857081a7b2d9dff073d3d8e02dbb50',
+            'Accept' => "application/json",
+            "Content-Type" => "application/json",
+        ])->get('https://www.clekktelecoms.com/api/user');
+        if($network == "MTN") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['MTN_PLAN']['SME'];
+            return $dat;
+        }
+        elseif($network == "AIRTEL") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['AIRTEL_PLAN']['SME'];
+            return $dat;
+        }
+        elseif($network == "9MOBILE") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['9MOBILE_PLAN']['SME'];
+            return $dat;
+        }
+        elseif($network == "GLO") {
+            $data['datas'] = $dat = $response->json()['Dataplans']['GLO_PLAN']['SME'];
+            return $dat;
+
+        }
+        else {
+            return false;
+        }
+        
+        
+
+    }
+     public function getdataPrice2(Request $request) {
+        $network = $request->network;
+        $data = Data::where('network',$network)->orderBy('actual_price')->get();
+        return $data;
+    }
+
+    public function pin()
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.changepin', $data);
+    }
+    public function pinreset($slug)
+    {
+        $data['alerts'] = Alert::latest()->get();
+        
+        $data['monnify'] = $mm = $this->reserveAccount();
+         $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.pinreset', $data);
+    }
+    public function changepin(Request $request)
+    {
+        $value = explode(",", $request->value);
+        $current = intval($value[0]);
+        $new = intval($value[1]);
+        // dd($current,$new);
+        $user = Auth::user();
+        $pin = $user->pin;
+        if ($pin == $current) {
+            $user->pin = $new;
+            $user->save();
+        } else {
+            return "not_matched";
+        }
+    }
+    public function forgetpin()
+    {
+        $user = Auth::user();
+        $random = "ABDS7";
+        $data = array('name' => $user->name, 'random' => $random);
+
+        Mail::send('mail.resetpin', $data, function ($message) use ($user) {
+            $message->to($user->email, '')->subject('Request to change pin');
+            $message->from('fafodata@veenodetech.com', 'Fafodata');
+        });
+    }
+    public function resetpin(Request $request)
+    {
+        $values = explode(",", $request->value);
+        if ($values[0] == $values[1]) {
+            $user = Auth::user();
+            $user->pin = $values[0];
+            $user->save();
+            return true;
+        } else {
+            return "not_matched";
+        }
+    }
+    public function referral_registration($slug)
+    {
+        $data['slug'] = $slug;
+        // dd($slug);
+        // return redirect()->route('register')->with($data);
+        return view('auth.register', $data);
+    }
+    public function contact_form(Request $request)
+    {
+
+        $data = array('name' => $request->name, 'user_email' => $request->email, 'user_subject' => $request->subject, 'user_message' => $request->message);
+
+        // Mail::send('mail.contact', $data, function($message) {
+        //     $message->to('fasanyafemi@gmail.com', '')->subject
+        //        ('User request from steadyhub');
+        //     $message->from('steadysub@veenodetech.com','Steadyhub');
+        //  });
+        return 'sent';
+    }
+    public function processTransaction(Request $request)
+    {
+        $values = explode(",", $request->value);
+        // dd($values);
+        $result = $this->create_transaction($values[0], $values[1], $values[2], $values[3], $values[4], $values[5]);
+
+        if ($result == 'completed') {
+            return $result;
+        } else {
+            return "Transaction error";
+        }
+    }
+    public function getdiscount2(Request $request)
+    {
+        $value = $request->value;
+        $values = explode(",", $value);
+       
+        if ($values[1] == 'airtime') {
+            $airtime = AirtimePrice::where('network', $values[0])->first()->set_price;
+
+            return $airtime;
+        } elseif ($values[1] == "data") {
+        } elseif ($values[1] == "electricity") {
+            $elec = ElectricityPrice::where('name', $values[0])->first()->set_price;
+            return $elec;
+        } elseif ($values[1] == "tv") {
+            $tv = TvPrice::where('name', $values[0])->first()->set_price;
+
+            return $tv;
+        } else {
+            return false;
+        }
+    }
+    public function getdiscount(Request $request)
+    {
+        $value = $request->value;
+        $values = explode(",", $value);
+      
+        if ($values[1] == 'airtime') {
+            $airtime = AirtimePrice::where('network', $values[0])->first()->set_price;
+
+            return $airtime;
+        } elseif ($values[1] == "data") {
+        } elseif ($values[1] == "electricity") {
+            $elec = ElectricityPrice::where('name', $values[0])->first()->set_price;
+            return $elec;
+        } elseif ($values[1] == "tv") {
+            $tv = TvPrice::where('name', $values[0])->first()->set_price;
+
+            return $tv;
+        } else {
+            return false;
+        }
+    }
+    public function verification_resend()
+    {
+
+        $user = Auth::user();
+        event(new Registered($user));
+        return redirect()->back()->with('message', 'Verification link has been resent, please check your email address');
+    }
+    public function profile()
+    {
+        $data['alerts'] = Alert::latest()->get();
+         $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.profile', $data);
+    }
+    public function transactiondetials($id)
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['transaction'] = Transaction::find($id);
+        return view('user.transaction', $data);
+    }
+    public function usernotifications()
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['notifications'] = Notification::get();
+        return view('user.notifications', $data);
+    }
+    public function manualfunding(Request $request)
+    {
+        $this->validate($request, [
+            'name' => 'required',
+            'bank_name' => 'required',
+            'amount' => 'required'
+        ]);
+        ManualFunding::create([
+            'account_name' => $request->name,
+            'bank_name' => $request->bank_name,
+            'amount' => $request->amount,
+            'user_id' => Auth::user()->id
+        ]);
+        return 'success';
+    }
+    public function ticket()
+    {
+
+        return view('user.ticket');
+    }
+
+    public function createticket(Request $request)
+    {
+        $this->validate($request, [
+            'description' => 'required',
+
+        ]);
+        Ticket::create([
+            'description' => $request->description,
+            'user_id' => Auth::user()->id
+        ]);
+        return 'success';
+    }
+    public function editprofile()
+    {
+        $data['alerts'] = Alert::latest()->get();
+         $data['monnify'] = $mm = $this->reserveAccount();
+
+        return view('user.editprofile', $data);
+    }
+    public function cable()
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.cable', $data);
+    }
+    public function fetchairtime()
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['mtn'] =   Airtime::where('network', 'MTN')->get();
+        $data['glo'] = Airtime::where('network', 'GLO')->get();
+        $data['airtel'] = Airtime::where('network', 'AIRTEL')->get();
+        $data['mobile'] = Airtime::where('network', '9MOBILE')->get();
+
+        return view('user.fetchairtime', $data);
+    }
+
+public function buycable2(Request $request)
+    {
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $balance = Auth::user()->balance;
+        $pin = Auth::user()->pin;
+        $amount = $request->amount;
+        $cable_type = $request->cable_type;
+        $decoder_no = $request->decoder_no;
+        $user = Auth::user();
+        $totalF = AdminFund::find(1);
+        $adminbalance = $totalF->balance;
+
+
+        if ($pin == $user_pin) {
+            if ($balance > intval($amount) && intval($adminbalance) > intval($amount) && intval($amount) >= 100) {
+                return 'success';
+               
+            } else {
+                return "Insufficient Balance";
+            }
+        } else {
+            return "Incorrect Pin";
+        }
+    }
+    
+    public function electricity2(Request $request)
+    {
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $balance = Auth::user()->balance;
+        $pin = Auth::user()->pin;
+        $amount = $request->amount;
+        $service_type = $request->service_type;
+        $meter_type = $request->meter_type;
+        $meter_no = $request->meter_no;
+        $user = Auth::user();
+        $totalF = AdminFund::find(1);
+        $adminbalance = $totalF->balance;
+
+        if ($pin == $user_pin) {
+            if ($balance > intval($amount) && intval($adminbalance) > intval($amount) && intval($amount) >= 100 ) {
+                return 'success';
+            } else {
+                return "Insufficient Balance";
+            }
+        } else {
+            return "Incorrect Pin";
+        }
+    }
+
+    public function exam()
+    {
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['exams'] = ExamPin::get();
+        $data['user'] = Auth::user();
+        return view('user.exam', $data);
+    }
+     public function buypin(Request $request)
+    {
+        
+
+
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $balance = Auth::user()->balance;
+        $pin = Auth::user()->pin;
+        $amount = $request->amount;
+        $exam_type = $request->exam_type;
+        $package = $request->package;
+        $totalF = AdminFund::find(1);
+        $adminbalance = $totalF->balance;
+
+        $user = Auth::user();
+        if ($pin == $user_pin) {
+            if ($balance > intval($amount) && intval($adminbalance) > intval($amount) && intval($amount) >= 100) {
+              
+                  
+                    $curl = curl_init();
+                    curl_setopt_array($curl, array(
+                        CURLOPT_URL => $request->serviceID,
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => "",
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 0,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => "POST",
+                        CURLOPT_POSTFIELDS => array(
+                            'no_of_pins' => 1,
+                        ),
+                        CURLOPT_HTTPHEADER => array(
+                            "AuthorizationToken: ".env("EASY_ACCESS_TOKEN"),
+                            "cache-control: no-cache"
+                        ),
+                    ));
+                    $response = curl_exec($curl);
+
+
+                    $r_pin = $response;
+                    $r_amount = $amount;
+
+                    $data = array('name' => Auth::user()->name, 'pin' => $r_pin, 'amount' => $r_amount);
+                    // Mail::send('mail.exam', $data, function ($message) use ($user) {
+                    //     $message->to($user->email, 'Telneting')->subject('Exam Pin Details');
+                    //     $message->from('support@telneting.com', 'Telneting');
+                    // });
+                  
+                    return $response;
+                
+            } else {
+                return "Insufficient Balance";
+            }
+        } else {
+            return "Incorrect Pin";
+        }
+
+    }
+
+    public function fundwallet()
+    {
+
+        $data['split'] = [
+            "type" => "percentage",
+            "currency" => "KES",
+            "subaccounts" => [
+                ["subaccount" => "ACCT_li4p6kte2dolodo", "share" => 10],
+                ["subaccount" => "ACCT_li4p6kte2dolodo", "share" => 30],
+            ],
+            "bearer_type" => "all",
+            "main_account_share" => 70
+        ];
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        return view('user.fundwallet', $data);
+    }
+    public function fundwallet2(Request $request)
+    {
+
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $balance = Auth::user()->balance;
+        $pin = Auth::user()->pin;
+        $amount = $request->amount;
+        $service_type = $request->service_type;
+        $meter_type = $request->meter_type;
+        $meter_no = $request->meter_no;
+        $user = Auth::user();
+
+        if ($pin == $user_pin) {
+            //code for the referral
+            if ($user->spent == null) {
+                $ref = User::where('referral_link', $user->referred_by)->first();
+                $referral_amount = ReferralAmount::find(1)->amount;
+                $ref->balance += $referral_amount;
+                $ref->save();
+                $title = "Referral Bonus";
+                $description = 'Account Funded with #100 from ' . $user->name;
+                $type = 'credit';
+
+                $this->create_transaction($title, $description, $type, $referral_amount, $ref);
+
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'title' => 'Funding Wallet',
+                    'service_type' => 'Wallet Fund',
+                    'description' => 'Account Funded with #' . $amount,
+                    'amount' => $amount,
+                ]);
+                $user->balance += $amount - $referral_amount;
+                $fund = TotalFund::find(1);
+                $fund->amount = $fund->amount + $amount;
+
+                $fund->save();
+
+                $user->save();
+            } else {
+                Transaction::create([
+                    'user_id' => $user->id,
+                    'title' => 'Funding Wallet',
+                    'service_type' => 'Wallet Fund',
+                    'description' => 'Account Funded with #' . $amount,
+                    'amount' => $amount,
+                ]);
+                $fund = TotalFund::find(1);
+                $fund->amount = $fund->amount + $amount;
+
+                $fund->save();
+                $user->balance += $amount;
+
+                $user->save();
+            }
+
+
+
+
+            return 'transaction successful';
+            //here is where the purchase will take place
+
+        } else {
+            return "Incorrect Pin";
+        }
+    }
+
+    public function buyairtime()
+    {
+        $data['user'] = Auth::user();
+        $data['alerts'] = Alert::latest()->get();
+        
+        $data['discount'] = AirtimePrice::pluck('set_price');
+        $data['monnify'] = $mm = $this->reserveAccount();
+        // dd($mm);
+        // $data['monnify'] = $mm = $this->reserveAccount()['responseBody']['accounts'][0];
+       
+        return view('user.buyairtime', $data);
+    }
+ public function buyAirtimeAPI(Request $request) {
+     
+       
+            $response = Http::withBasicAuth('victorakinode@gmail.com',env('VTPASS_PASSWORD'))->post('https://vtpass.com/api/pay?request_id='.$request->request_id.'&serviceID='.$request->serviceID.'&amount='.$request->amount.'&phone='.$request->phone);
+            return $response->json();
+      
+    }
+    public function fetchairtime2(Request $request)
+    {
+        // dd('here');
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $user_pin = (int)$pin1;
+        // dd($user_pin,$request->all());
+
+        $balance = Auth::user()->balance;
+        $pin = Auth::user()->pin;
+        $amount = $request->price;
+        $network = $request->network;
+        $quantity = $request->quantity;
+        $user = Auth::user();
+        // dd($request->all());
+        $airtime = Airtime::where('network', $network)->where('amount', $amount)->where('status', 0)->get();
+        if ($pin == $user_pin) {
+            if ($balance > $amount) {
+                if (count($airtime) >= $quantity) {
+
+                    $data['airtimes'] = $airtime2 = Airtime::where('network', $network)->where('amount', $amount)->where('status', 0)->take($quantity)->get();
+                    // dd($airtime2,$request->all());
+                    Transaction::create([
+                        'user_id' => $user->id,
+                        'title' => 'Fetch airtime',
+                        'service_type' => 'Fetch airtime pin',
+                        'description' => '' . $network . ' Airtime pin generated, Total amount: ' . $amount * $quantity,
+                        'amount' => $amount * $quantity,
+                    ]);
+                    $user->balance -= $amount * $quantity;
+                    $user->spent += $amount * $quantity;
+                    $user->save();
+                    foreach ($airtime2 as $airtime) {
+
+                        $airtime->delete();
+                    }
+                    $pdf = PDF::loadView('user.airtimefetchedpdf', $data);
+
+                    return $pdf->download('generatedpin.pdf');
+                    return view('user.airtimefetched', $data);
+                } else {
+                    return redirect()->back()->with('message', "Airtime quantity not available");
+                }
+
+                //here is where the purchase will take place
+            } else {
+                return redirect()->back()->with('message', "Opps, Insufficient Balance");
+            }
+        } else {
+            return redirect()->back()->with('message', "Opps, Incorrect Pin");
+        }
+    }
+
+
+    public function updatepin(Request $request)
+    {
+        $user = Auth::user();
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+
+        $user->pin = $pin1;
+        $user->save();
+    }
+      public function buyairtime2(Request $request)
+    {
+       
+        $phone = $request->phone;
+        $network = $request->network;
+        $val = substr($phone, 0, 4);
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+        $user = Auth::user();
+        $totalF = AdminFund::find(1);
+        $adminbalance = $totalF->balance;
+
+        $balance = $user->balance;
+        $pin = $user->pin;
+
+        $amount = $request->amount;
+        if ($pin == $user->pin) {
+            if ( $balance > $amount && $amount >= 100) {
+                if($adminbalance < $amount) {
+                    return 'low_balance';
+                }
+                else {
+                    $reference = 'tranx' . Str::random(8);
+
+                    $network_id = $request->serviceID;
+                    $phone = $request->phone;
+                    $plan_id = $request->plan_id;
+                    $name = $request->name;
+                    if ($network_id == 'MTN') {
+                        $network_id = '01';
+                    } elseif ($network_id == 'GLO') {
+                        $network_id = '02';
+                    } elseif ($network_id == 'AIRTEL') {
+                        $network_id = '03';
+                    } elseif ($network_id == '9MOBILE') {
+                        $network_id = '04';
+                    } else {
+                        return false;
+                    }
+
+
+                    // dd($request_body,$request->all(), env('EASY_ACCESS_TOKEN'));
+
+                    $curl = curl_init();
+                    curl_setopt_array($curl, array(
+                        CURLOPT_URL => "https://easyaccessapi.com.ng/api/airtime.php",
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => "",
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 0,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => "POST",
+                        CURLOPT_POSTFIELDS => array(
+                            'network' => intval($network_id),
+                            'amount' => $amount,
+                            'mobileno' => $phone,
+                            'airtime_type' => '001',
+                            'client_reference' => $reference,
+                        ),
+                        CURLOPT_HTTPHEADER => array(
+                            "AuthorizationToken: ".env("EASY_ACCESS_TOKEN"),
+                            "cache-control: no-cache"
+                        ),
+                    ));
+                    $response = curl_exec($curl);
+                    curl_close($curl);
+                  
+                    return $response;
+                }
+            } else {
+                return "Insufficient Balance";
+            }
+        } else {
+            return "Incorrect Pin";
+        }
+    }
+    
+    public function buydata()
+    {
+         $data['user'] = Auth::user();
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['datas'] = $dd=  Data::orderBy("actual_price")->get();
+       
+        
+        return view('user.buydata', $data);
+    }
+    public function searchdata(Request $request)
+    {
+        $val = $request->val;
+        $data = Data::where('network', $val)->orderBy('actual_price')->get();
+        return $data;
+    }
+   
+  public function buydata2(Request $request)
+    {
+      
+        $phone = $request->phone;
+        $network = $request->network;
+        $val = substr($phone, 0, 4);
+        $user_pin = '';
+        $user_pin .= $request->first;
+        $user_pin .= $request->second;
+        $user_pin .= $request->third;
+        $user_pin .= $request->fourth;
+        $pin1 = (int)$user_pin;
+        $user = Auth::user();
+        $balance = $user->balance;
+        $pin = $user->pin;
+        $amount = $request->amount;
+
+        $totalF = AdminFund::find(1);
+        $adminbalance = $totalF->balance;
+
+        if ($pin == $pin1) {
+            if ($balance > intval($amount) && intval($amount) >= 100) {
+                if(intval($adminbalance) < intval($amount)) {
+                    return 'low_balance';
+                }
+                else {
+                    
+                //Check for duplicate transaction
+              $tranx = Transaction::create([
+                        'user_id' => $user->id,
+                        'title' => 'Data Purchase',
+                        'service_type' => 'debit',
+                        'before' => $user->balance,
+                        'description' => 'NGN '.intval($amount).' amount of data purchased on'. $phone,
+                        'amount' => intval($amount),
+                        ]);
+                    $user->balance -= intval($amount);
+                    $user->save();
+                    $tranx->after = $user->balance;
+                    $tranx->save();
+
+                    $reference = 'tranx' . Str::random(8);
+
+                    $network_id = $request->network_id;
+                    $phone = $request->phone;
+                    $plan_id = $request->plan_id;
+                    $name = $request->name;
+                    $request_body = [
+                        "dataplan" => intval($plan_id),
+                        "network" => intval($network_id),
+                        "mobileno" => $phone,
+                        "client_reference" => $reference
+
+                    ];
+                    // dd($request_body, env('EASY_ACCESS_TOKEN'));
+
+                    $curl = curl_init();
+                    curl_setopt_array($curl, array(
+                        CURLOPT_URL => "https://easyaccessapi.com.ng/api/data.php",
+                        CURLOPT_RETURNTRANSFER => true,
+                        CURLOPT_ENCODING => "",
+                        CURLOPT_MAXREDIRS => 10,
+                        CURLOPT_TIMEOUT => 0,
+                        CURLOPT_FOLLOWLOCATION => true,
+                        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                        CURLOPT_CUSTOMREQUEST => "POST",
+                        CURLOPT_POSTFIELDS => array(
+                            'network' => intval($network_id),
+                            'mobileno' => $phone,
+                            'dataplan' => intval($plan_id),
+                            'client_reference' => $reference, //update this on your script to receive webhook notifications
+                        ),
+                        CURLOPT_HTTPHEADER => array(
+                            "AuthorizationToken: ".env("EASY_ACCESS_TOKEN"),
+                            "cache-control: no-cache"
+                        ),
+                    ));
+                    $response = curl_exec($curl);
+                    curl_close($curl);
+                  
+                  
+                    return $response;
+}
+                
+            } else {
+                return "Insufficient Balance";
+            }
+        } else {
+            return "Incorrect Pin";
+        }
+    }
+    
+    
+    public function checkpin(Request $request)
+    {
+        $pin = Auth::user()->pin;
+        if ($pin == null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    public function updateprofile(Request $request)
+    {
+        $user = Auth::user();
+
+        $user->name = $request->name;
+        $user->phone = $request->phone;
+        if ($request->has('image')) {
+            $image = $request->file('image');
+            $fileName = $image->hashName();
+            $image->move(public_path() . '/profilepic/', $fileName);
+            $user->image = $fileName;
+        } else {
+            $user->image = Auth::user()->image;
+        }
+        $user->save();
+    }
+    public function landing()
+    {
+        $data['airtel'] = Data::where('network', 'airtel')->orderBy('set_price')->get();
+        $data['mtn'] = Data::where('network', 'mtn')->orderBy('set_price')->get();
+        $data['glo'] = Data::where('network', 'glo')->orderBy('set_price')->get();
+        $data['nmobile'] = Data::where('network', '9mobile')->orderBy('set_price')->get();
+        // dd($data);
+        return view('frontend.index2', $data);
+    }
+    public function about()
+    {
+        return view('frontend.about');
+    }
+    public function e404()
+    {
+        return view('frontend.404');
+    }
+    public function dashboard()
+    {
+        $user = Auth::user();
+        $data['alerts'] = Alert::latest()->get();
+        $data['monnify'] = $mm = $this->reserveAccount();
+        $data['transactions'] = Transaction::where('user_id', Auth::user()->id)->latest()->get();
+        if ($user->type == 0) {
+
+            return view('user.index', $data);
+        } else {
+            $data['alerts'] = Alert::latest()->get();
+            return redirect()->route('admindashboard');
+        }
+    }
+}
