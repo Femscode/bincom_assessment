@@ -40,13 +40,13 @@
         <!--   Group 1 -->
 
 
-        <div class="col-lg-8 col-md-6 mb-md-0 mb-4 mt-4">
-            <div class='row ml-8 p-2'>
+        <div class="col-lg-8 col-md-12 sm-12 mb-md-0 mb-4 mt-4">
+            <div class='row'>
                 <div class="col-md-6 card media-element"
                     style='background:#d1ecf1;color:#0c5460;border-left-color:#0c5460;border-left-width:5px'>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-12">
+                       
+                            <div class="col">
                                 <div class="numbers">
 
                                     <a href='#' class="mb-0" style='color:#0c5460'>
@@ -55,14 +55,14 @@
                                     </a>
                                 </div>
                             </div>
-                        </div>
+                       
                     </div>
                 </div>
                 <div class="col-md-6 card media-element"
                     style='background:#d4edda;color:#155724;border-left-color:#155724;border-left-width:5px'>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-12">
+                       
+                            <div class="col">
                                 <div class="numbers">
                                     <i class="fas fa-mobile scroll-icon p-2"></i>
                                     <a href='#' class="mb-0" style='color:#155724'>
@@ -71,7 +71,7 @@
                                     </a>
                                 </div>
                             </div>
-                        </div>
+                       
                     </div>
                 </div>
 
