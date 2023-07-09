@@ -66,7 +66,7 @@
                                 <div class="numbers">
                                     <i class="fas fa-mobile scroll-icon p-2"></i>
                                     <a href='#' class="mb-0" style='color:#155724'>
-                                        Winner : <span id='winner'>Not yet determined</span>
+                                        Winner : <span id='winner'>Select LGA Above</span>
 
                                     </a>
                                 </div>
